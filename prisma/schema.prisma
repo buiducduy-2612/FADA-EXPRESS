@@ -1,0 +1,240 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id                      String        @id @default(cuid())
+  name                    String?
+  email                   String        @unique
+  password                String
+  role                    String        @default("SALE")
+  roleId                  String?
+  customRole              Role?         @relation(fields: [roleId], references: [id])
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  avatar                  String?
+  activities              ActivityLog[] @relation("UserActivities")
+  customers               Customer[]    @relation("SalesCustomers")
+  personInChargeCustomers Customer[]    @relation("PersonInCharge")
+  bookings                Booking[]     @relation("SalesBookings")
+  commissionRate          Float         @default(0)
+  passwordResetTokens     PasswordResetToken[]
+  assignedLeads           ContactLead[]
+  picHistoryFrom          CustomerPICHistory[] @relation("PICHistoryFrom")
+  picHistoryTo            CustomerPICHistory[] @relation("PICHistoryTo")
+  picHistoryChangedBy     CustomerPICHistory[] @relation("PICHistoryChangedBy")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  permissions String   @default("[]") // JSON string of permission keys
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+}
+
+model Customer {
+  id               String     @id @default(cuid())
+  name             String
+  contact          String?
+  email            String     @unique
+  phone            String?
+  industry         String?
+  status           String     @default("active")
+  taxCode          String?
+  address          String?
+  userId           String?
+  personInChargeId String?
+  isApproved       Boolean    @default(false)
+  tier             String     @default("POTENTIAL")
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  sales            User?      @relation("SalesCustomers", fields: [userId], references: [id])
+  personInCharge   User?      @relation("PersonInCharge", fields: [personInChargeId], references: [id])
+  bookings         Booking[]  @relation("CustomerBookings")
+  picHistory       CustomerPICHistory[]
+}
+
+model CustomerPICHistory {
+  id           String   @id @default(cuid())
+  customerId   String
+  fromUserId   String?
+  toUserId     String?
+  changedById  String?
+  note         String?
+  createdAt    DateTime @default(now())
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  fromUser     User?    @relation("PICHistoryFrom",      fields: [fromUserId],  references: [id])
+  toUser       User?    @relation("PICHistoryTo",        fields: [toUserId],    references: [id])
+  changedBy    User?    @relation("PICHistoryChangedBy", fields: [changedById], references: [id])
+}
+
+model Booking {
+  id               String    @id @default(cuid())
+  reference        String    @unique
+  awbNumber        String?
+  customerId       String
+  salesId          String?
+  flightId         String?
+  origin           String
+  destination      String
+  status           String    @default("pending")
+  approvalStatus   String    @default("PENDING")
+  paymentStatus    String    @default("UNPAID")
+  amountPaid       Float     @default(0)
+  pieces           Int       @default(1)
+  weight           Float     @default(0)
+  chargeableWeight Float     @default(0)
+  volume           Float     @default(0)
+  freightRevenue   Float     @default(0)
+  surcharge        Float     @default(0)
+  otherFees        Float     @default(0)
+  otherFeeLabel    String    @default("Phí phát sinh khác")
+  totalRevenue     Float     @default(0)
+  totalCost        Float     @default(0)
+  commission       Float     @default(0)
+  shipper          String?
+  cargoType        String?
+  service          String?
+  description      String?
+  shipDate         DateTime?
+  etd              DateTime?
+  eta              DateTime?
+  senderName       String?
+  senderPhone      String?
+  senderCountry    String?
+  senderState      String?
+  senderCity       String?
+  senderZip        String?
+  senderAddress    String?
+  recipientName    String?
+  recipientPhone   String?
+  recipientCountry String?
+  recipientState   String?
+  recipientCity    String?
+  recipientZip     String?
+  recipientAddress String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  packages         Package[]
+  invoices         Invoice[]
+  flight           Flight?   @relation(fields: [flightId], references: [id])
+  sales            User?     @relation("SalesBookings", fields: [salesId], references: [id])
+  customer         Customer  @relation("CustomerBookings", fields: [customerId], references: [id])
+}
+
+model Invoice {
+  id         String    @id @default(cuid())
+  invoiceNo  String    @unique
+  bookingId  String?
+  amount     Float
+  currency   String    @default("VND")
+  status     String    @default("unpaid")
+  dueDate    DateTime?
+  paidDate   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  booking    Booking?  @relation(fields: [bookingId], references: [id])
+}
+
+model Flight {
+  id          String    @id @default(cuid())
+  airline     String
+  flightNo    String    @unique
+  origin      String
+  destination String
+  departure   String
+  arrival     String
+  capacity    Int       @default(100)
+  status      String    @default("on_time")
+  type        String    @default("Cargo")
+  frequency   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  bookings    Booking[]
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String
+  userId     String
+  details    String?
+  createdAt  DateTime @default(now())
+  user       User     @relation("UserActivities", fields: [userId], references: [id])
+}
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  subject   String
+  body      String   // HTML content
+  type      String   // e.g., "BOOKING_CONFIRMATION", "INVOICE"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AppSetting {
+  id              String   @id @default("global")
+  systemName      String   @default("LOGICTIS AIR")
+  logoUrl         String?
+  companyName    String   @default("")
+  companyAddress String   @default("")
+  companyPhone   String   @default("")
+  companyEmail   String   @default("")
+  companyTaxCode String   @default("")
+  companyBankInfo String  @default("")
+  companyCountry  String   @default("")
+  companyState    String   @default("")
+  companyCity     String   @default("")
+  updatedAt       DateTime @updatedAt
+}
+
+model Package {
+  id            String   @id @default(cuid())
+  bookingId     String
+  booking       Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  packagingType String   // e.g., Carton, Pak, Envelope, Pallet, Roll, Other
+  weight        Float    @default(0)
+  length        Float?
+  width         Float?
+  height        Float?
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model ContactLead {
+  id             String   @id @default(cuid())
+  fullName       String
+  email          String
+  phone          String
+  company        String?
+  origin         String?
+  destination    String?
+  cargoType      String?
+  weight         String?
+  message        String?
+  status         String   @default("NEW")
+  assignedToId   String?
+  assignedTo     User?    @relation(fields: [assignedToId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
