@@ -12,9 +12,13 @@ export async function GET() {
         const user = session.user as any;
         let whereClause: any = {};
 
-        // SALE can only see bookings they created (assigned to them as sales)
+        // SALE can only see bookings they created or their customers' bookings
         if (user.role === "SALE") {
-            whereClause.salesId = user.id;
+            whereClause.OR = [
+                { salesId: user.id },
+                { customer: { personInChargeId: user.id } },
+                { customer: { userId: user.id } }
+            ];
         }
         // CS, ACCOUNTING, DIRECTOR, ADMIN see all
 

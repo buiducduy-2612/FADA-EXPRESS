@@ -43,17 +43,30 @@ export async function GET(req: Request) {
         }
 
         const [bookings, invoices, _customers, _users, _flights] = await Promise.all([
-            (prisma as any).booking.findMany({ where, include: { customer: true, sales: true, flight: true, invoices: true } }),
-            (prisma as any).invoice.findMany({ include: { booking: { include: { customer: true } } } }),
+            (prisma as any).booking.findMany({ 
+                where, 
+                include: { customer: true, sales: true, flight: true, invoices: true } 
+            }),
+            (prisma as any).invoice.findMany({ 
+                where: {
+                    booking: where
+                },
+                include: { booking: { include: { customer: true } } } 
+            }),
             (prisma as any).customer.findMany({ 
                 where: {
                     ...(startDate && endDate ? { createdAt: { gte: new Date(startDate), lte: new Date(endDate) } } : {}),
-                    // Only SALE role is restricted, ADMIN sees everything
-                    ...((session.user as any)?.role === 'SALE' ? { userId: (session.user as any)?.id } : {})
+                    ...(userRole === 'SALE' ? { OR: [{ userId: userId }, { personInChargeId: userId }] } : {}),
+                    ...(customerId ? { id: customerId } : {})
                 },
                 include: { sales: true }
             }),
-            (prisma as any).user.findMany({ where: { role: { in: ['SALE', 'ADMIN', 'DIRECTOR'] } } }), // Include all potential sales roles
+            (prisma as any).user.findMany({ 
+                where: { 
+                    role: { in: ['SALE', 'ADMIN', 'DIRECTOR'] },
+                    ...(userRole === 'SALE' ? { id: userId } : {})
+                } 
+            }),
             (prisma as any).flight.findMany()
         ]);
 
@@ -172,11 +185,12 @@ export async function GET(req: Request) {
         // 7. Debt Report (A/R)
         const debtReportMap = new Map();
         (invoices as any[]).forEach(inv => {
+            const custId = inv.booking?.customerId || "unknown";
             const custName = inv.booking?.customer?.name || "Unknown";
-            if (!debtReportMap.has(custName)) {
-                debtReportMap.set(custName, { name: custName, total: 0, paid: 0, unpaid: 0, overdue: 0 });
+            if (!debtReportMap.has(custId)) {
+                debtReportMap.set(custId, { name: custName, total: 0, paid: 0, unpaid: 0, overdue: 0 });
             }
-            const data = debtReportMap.get(custName);
+            const data = debtReportMap.get(custId);
             data.total += inv.amount;
             if (inv.status === "paid") data.paid += inv.amount;
             else if (inv.status === "overdue") {

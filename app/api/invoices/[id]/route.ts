@@ -44,7 +44,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 where: { bookingId: updatedInvoice.bookingId, status: "paid" }
             });
 
-            const totalPaid = allInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+            const totalPaid = allInvoices.reduce((sum: number, inv: any) => sum + inv.amount, 0);
             
             const booking = await prisma.booking.findUnique({
                 where: { id: updatedInvoice.bookingId }
@@ -75,7 +75,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
+        const { id } = await params;
     try {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -83,7 +83,37 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
         const invoice = await prisma.invoice.findUnique({ where: { id } });
         if (!invoice) return NextResponse.json({ error: "NotFound" }, { status: 404 });
 
+        const bookingId = invoice.bookingId;
+
         await prisma.invoice.delete({ where: { id } });
+
+        // Trigger Sync with Booking
+        if (bookingId) {
+            const allInvoices = await prisma.invoice.findMany({
+                where: { bookingId, status: "paid" }
+            });
+
+            const totalPaid = allInvoices.reduce((sum: number, inv: any) => sum + inv.amount, 0);
+            
+            const booking = await prisma.booking.findUnique({
+                where: { id: bookingId }
+            });
+
+            if (booking) {
+                let newPaymentStatus = "UNPAID";
+                if (totalPaid >= (booking.totalRevenue || 0)) newPaymentStatus = "PAID";
+                else if (totalPaid > 0) newPaymentStatus = "PARTIAL";
+
+                await prisma.booking.update({
+                    where: { id: bookingId },
+                    data: {
+                        amountPaid: totalPaid,
+                        paymentStatus: newPaymentStatus
+                    }
+                });
+            }
+        }
+
         await logActivity((session.user as any)?.id, "DELETE", "INVOICE", id);
 
         return NextResponse.json({ success: true });

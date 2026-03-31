@@ -20,7 +20,14 @@ export async function GET(req: Request) {
 
         // SALE can only see invoices for their assigned customers
         if (user.role === "SALE") {
-            whereClause.booking = { customer: { personInChargeId: user.id } };
+            whereClause.booking = { 
+                customer: { 
+                    OR: [
+                        { personInChargeId: user.id },
+                        { userId: user.id }
+                    ]
+                } 
+            };
         }
 
         if (customerId) {
@@ -71,7 +78,7 @@ export async function POST(req: Request) {
                 where: { bookingId: invoice.bookingId, status: "paid" }
             });
 
-            const totalPaid = allInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+            const totalPaid = allInvoices.reduce((sum: number, inv: any) => sum + inv.amount, 0);
             const booking = await prisma.booking.findUnique({ where: { id: invoice.bookingId } });
             
             if (booking) {

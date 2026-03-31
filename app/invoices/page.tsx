@@ -161,6 +161,16 @@ export default function DebtManagementPage() {
 
     const handleExport = () => {
         const headers = ["Invoice No", "Customer", "Booking Ref", "Amount", "Currency", "Status", "Due Date", "Created At"];
+        
+        const escapeCSV = (val: any) => {
+            if (val === null || val === undefined) return "";
+            let s = String(val);
+            if (s.includes(",") || s.includes("\"") || s.includes("\n")) {
+                s = "\"" + s.replace(/"/g, "\"\"") + "\"";
+            }
+            return s;
+        };
+
         const rows = invoices.map(inv => [
             inv.invoiceNo,
             inv.booking?.customer?.name || "Unknown",
@@ -171,10 +181,15 @@ export default function DebtManagementPage() {
             inv.dueDate ? formatDate(inv.dueDate) : "N/A",
             formatDate(inv.createdAt)
         ]);
-        const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+
+        const csvContent = [
+            headers.join(","),
+            ...rows.map(r => r.map(escapeCSV).join(","))
+        ].join("\n");
+
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
         link.setAttribute("href", url);
         link.setAttribute("download", `Bao_cao_cong_no_${new Date().toISOString().split('T')[0]}.csv`);
         link.style.visibility = "hidden";
